@@ -1,7 +1,7 @@
 from flask import Flask, render_template, request, send_file, Response
 from ultralytics import YOLO
 from PIL import Image
-import io, os, base64, cv2, time
+import io, os, base64, cv2, time, requests
 from datetime import datetime
 from collections import Counter
 import numpy as np
@@ -12,22 +12,39 @@ from reportlab.platypus import (
 from reportlab.lib import colors
 from reportlab.lib.styles import getSampleStyleSheet
 from reportlab.lib.units import inch
-from reportlab.pdfgen import canvas
 from reportlab.lib.utils import ImageReader
 
 # ---------------- Flask Setup ----------------
 app = Flask(__name__)
 app.config['MAX_CONTENT_LENGTH'] = 20 * 1024 * 1024  # 20 MB upload limit
 
-# Load YOLOv11 model
-model = YOLO("best.pt")
-CONF_THRESHOLD = 0.4
+# ---------------- Model Auto-Download ----------------
+MODEL_PATH = "models/best.pt"
+MODEL_URL = "https://github.com/bryanmyer2505/ripenx-app/releases/download/v1.0-model/best.pt"
 
-latest_results = []   # store for PDF export
-camera = None         # global webcam reference
+# Auto-download model if missing
+if not os.path.exists(MODEL_PATH):
+    os.makedirs(os.path.dirname(MODEL_PATH), exist_ok=True)
+    print("📦 Mengunduh model dari GitHub release...")
+    with requests.get(MODEL_URL, stream=True) as r:
+        r.raise_for_status()
+        with open(MODEL_PATH, "wb") as f:
+            for chunk in r.iter_content(chunk_size=8192):
+                if chunk:
+                    f.write(chunk)
+    print("✅ Model berhasil diunduh dan disimpan ke", MODEL_PATH)
+
+# Load YOLOv11 model
+print("🧠 Memuat model YOLOv11...")
+model = YOLO(MODEL_PATH)
+CONF_THRESHOLD = 0.4
+print("✅ Model siap digunakan.")
+
+latest_results = []  # store for PDF export
+camera = None  # global webcam reference
 
 # ---------------- Tracking & Recording ----------------
-is_recording = False #bool that tells if the app is currently recording video
+is_recording = False
 recorder = None
 recorder_filepath = None
 record_start_time = None
@@ -36,12 +53,12 @@ tracked_objects = {}
 next_object_id = 0
 frame_idx = 0
 MAX_LOST_FRAMES = 30
-IOU_MATCH_THRESHOLD = 0.45 #Thresholding for object re-identification using IoU matching
+IOU_MATCH_THRESHOLD = 0.45
 last_frame_for_pdf = None
 
 # ---------------- Utility Functions ----------------
-def iou(boxA, boxB): #Intersection over Union
-    """Compute IoU between two boxes [x1,y1,x2,y2]."""
+def iou(boxA, boxB):
+    """Hitung IoU antara dua bounding box."""
     xA, yA = max(boxA[0], boxB[0]), max(boxA[1], boxB[1])
     xB, yB = min(boxA[2], boxB[2]), min(boxA[3], boxB[3])
     interW, interH = max(0, xB - xA), max(0, yB - yA)
@@ -53,7 +70,7 @@ def iou(boxA, boxB): #Intersection over Union
     return interArea / float(boxAArea + boxBArea - interArea + 1e-6)
 
 def boxes_from_results(results):
-    """Safely extract YOLOv11 detections."""
+    """Ambil hasil deteksi dari model YOLO dengan aman."""
     boxes_obj = results[0].boxes
     if boxes_obj is None:
         return []
@@ -65,24 +82,20 @@ def boxes_from_results(results):
 
 # ---------------- PDF Header/Footer ----------------
 def add_header_footer(canvas, doc):
-    """Add RipenX logo header & footer to all pages."""
+    """Tambahkan logo dan footer RipenX di setiap halaman PDF."""
     logo_path = os.path.join("static", "RipenX logo.jpg")
     width, height = A4
-
-    # Header
     if os.path.exists(logo_path):
         logo = ImageReader(logo_path)
         canvas.drawImage(logo, 40, height - 60, width=40, height=40, mask='auto')
     canvas.setFont("Helvetica-Bold", 10)
     canvas.drawString(90, height - 45, "RipenX AI Vision System – HPI Agro")
-
-    # Footer
     canvas.setStrokeColorRGB(0.3, 0.7, 0.3)
     canvas.setLineWidth(0.5)
     canvas.line(40, 40, width - 40, 40)
     canvas.setFont("Helvetica-Oblique", 8)
     canvas.setFillColor(colors.grey)
-    canvas.drawString(40, 28, "© 2025 RipenX AI Vision System – Confidential Report")
+    canvas.drawString(40, 28, "© 2025 RipenX AI Vision System – Laporan Rahasia")
 
 # ---------------- Flask Routes ----------------
 @app.route("/")
@@ -94,14 +107,13 @@ def home():
 def detect():
     global latest_results, camera
 
-    # Release any existing camera to avoid conflict
     if camera and camera.isOpened():
         camera.release()
         camera = None
 
     latest_results = []
     if "image" not in request.files and "frame" not in request.form:
-        return "<p style='color:red'>⚠️ Tidak ada gambar atau frame yang tersedia</p>"
+        return "<p style='color:red'>⚠️ Tidak ada gambar atau frame yang tersedia.</p>"
 
     images = []
     if "image" in request.files:
@@ -138,13 +150,9 @@ def detect():
             "image": img_buffer.getvalue()
         })
 
-        low_conf = any(d["confidence"] < 0.5 for d in det_summary)
         warning_html = ""
-        if low_conf:
-            warning_html = """
-            <div class='alert-warning'>
-                ⚠️ Beberapa deteksi memiliki tingkat confidence rendah — model tidak yakin.
-            </div>"""
+        if any(d["confidence"] < 0.5 for d in det_summary):
+            warning_html = "<div class='alert-warning'>⚠️ Beberapa deteksi memiliki tingkat kepercayaan rendah.</div>"
 
         det_rows = "".join([
             f"<tr><td>{d['label']}</td><td>{d['confidence']*100:.2f}%</td></tr>"
@@ -154,11 +162,11 @@ def detect():
         results_html += f"""
         <div class='card'>
             <p><b>File:</b> {filename}</p>
-            <img src='data:image/png;base64,{img_base64}' alt='Detected Image'>
+            <img src='data:image/png;base64,{img_base64}' alt='Hasil Deteksi'>
             {warning_html}
             <h4>Rangkuman Deteksi</h4>
             <table class='prob-table'>
-                <tr><th>Label</th><th>Confidence</th></tr>
+                <tr><th>Kelas</th><th>Kepercayaan</th></tr>
                 {det_rows}
             </table>
         </div>"""
@@ -172,9 +180,8 @@ def stream():
 
 # ---------------- Frame Generator ----------------
 def generate_frames():
-    """Stream YOLO detections live + optional recording."""
+    """Streaming deteksi langsung dengan pelacakan objek."""
     global camera, is_recording, recorder, unique_counts, tracked_objects, next_object_id, frame_idx, last_frame_for_pdf
-
     try:
         if camera is None or not camera.isOpened():
             camera = cv2.VideoCapture(0)
@@ -190,7 +197,6 @@ def generate_frames():
             annotated = results[0].plot()
             detections = boxes_from_results(results)
 
-            # Extract detections
             curr_dets = []
             for det in detections:
                 x1, y1, x2, y2, conf, cls = det
@@ -199,7 +205,7 @@ def generate_frames():
                 label = model.names[int(cls)]
                 curr_dets.append({'bbox': [x1, y1, x2, y2], 'label': label})
 
-            # IoU-based object tracking
+            # IoU-based tracking
             matched, used = set(), set()
             for obj_id, obj in list(tracked_objects.items()):
                 best_i, best_idx = 0, None
@@ -215,7 +221,6 @@ def generate_frames():
                     matched.add(obj_id)
                     used.add(best_idx)
 
-            # Register new objects
             for idx, det in enumerate(curr_dets):
                 if idx not in used:
                     obj_id = next_object_id
@@ -230,17 +235,14 @@ def generate_frames():
                     if is_recording:
                         unique_counts[det['label']] += 1
 
-            # Clean up old tracks
             to_remove = [oid for oid, o in tracked_objects.items() if frame_idx - o['last_seen'] > MAX_LOST_FRAMES]
             for oid in to_remove:
                 del tracked_objects[oid]
 
-            # If recording, save frame
             if is_recording and recorder:
                 last_frame_for_pdf = annotated.copy()
                 recorder.write(annotated)
 
-            # FPS overlay
             current_time = time.time()
             fps = 1 / (current_time - prev_time) if prev_time else 0
             prev_time = current_time
@@ -249,13 +251,12 @@ def generate_frames():
 
             ret, buffer = cv2.imencode('.jpg', annotated)
             yield (b'--frame\r\nContent-Type: image/jpeg\r\n\r\n' + buffer.tobytes() + b'\r\n')
-
             time.sleep(0.03)
     finally:
         if camera and camera.isOpened():
             camera.release()
             camera = None
-            print("📷 Camera released safely after stream ended.")
+            print("📷 Kamera dilepaskan setelah streaming selesai.")
 
 # ---------------- Stream Routes ----------------
 @app.route('/video_feed')
@@ -264,30 +265,26 @@ def video_feed():
 
 @app.route('/stop_stream')
 def stop_stream():
-    """Release the webcam stream manually."""
     global camera
     if camera and camera.isOpened():
         camera.release()
         camera = None
-        print("📷 Camera released manually via /stop_stream.")
-        return "Camera released successfully."
-    return "Camera already stopped."
+        print("📷 Kamera dihentikan secara manual.")
+        return "Kamera berhasil dihentikan."
+    return "Kamera sudah berhenti."
 
 # ---------------- Start Recording ----------------
 @app.route('/start_record')
 def start_record():
-    """Start recording using the active live stream camera."""
     global is_recording, recorder, unique_counts, record_start_time, recorder_filepath, tracked_objects, next_object_id, frame_idx, camera
 
     if not camera or not camera.isOpened():
-        print("⚠️ Camera not active, cannot start recording.")
-        return "Camera not active — start live stream first."
+        return "⚠️ Kamera belum aktif. Harap mulai streaming terlebih dahulu."
 
     if not os.path.exists("recordings"):
         os.makedirs("recordings")
 
     w, h = int(camera.get(cv2.CAP_PROP_FRAME_WIDTH)) or 640, int(camera.get(cv2.CAP_PROP_FRAME_HEIGHT)) or 480
-
     tracked_objects.clear()
     next_object_id, frame_idx = 0, 0
     unique_counts = Counter()
@@ -296,17 +293,13 @@ def start_record():
     recorder_filepath = f"recordings/session_{int(record_start_time)}.mp4"
     fourcc = cv2.VideoWriter_fourcc(*'mp4v')
     recorder = cv2.VideoWriter(recorder_filepath, fourcc, 20.0, (w, h))
-
     is_recording = True
-    print("🎥 Recording started using live stream camera.")
-    return "Recording started"
+    return "Perekaman dimulai."
 
 # ---------------- Stop Recording + Generate PDF ----------------
 @app.route('/stop_record')
 def stop_record():
-    """Stop recording, summarize results, generate PDF."""
     global is_recording, recorder, unique_counts, record_start_time, last_frame_for_pdf
-
     is_recording = False
     if recorder:
         recorder.release()
@@ -315,29 +308,29 @@ def stop_record():
     duration = time.time() - record_start_time if record_start_time else 0
     timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
     file_time = datetime.now().strftime("%Y%m%d_%H%M%S")
-    pdf_path = f"RipenX_Video_Report_{file_time}.pdf"
+    pdf_path = f"Laporan_RipenX_{file_time}.pdf"
 
     doc = SimpleDocTemplate(pdf_path, pagesize=A4)
     styles = getSampleStyleSheet()
     story = []
 
-    # COVER PAGE
+    # Cover page
     logo_path = os.path.join("static", "RipenX logo.jpg")
     if os.path.exists(logo_path):
         story.append(RLImage(logo_path, width=2.5 * inch, height=2.5 * inch))
     story.append(Spacer(1, 20))
-    story.append(Paragraph("<b>Laporan Object Detection HPI-Agro Palm Oil</b>", styles["Title"]))
+    story.append(Paragraph("<b>Laporan Deteksi Buah Kelapa Sawit HPI-Agro</b>", styles["Title"]))
     story.append(Spacer(1, 12))
-    story.append(Paragraph("Project Info: RipenX Palm Oil Live Detection System", styles["Normal"]))
-    story.append(Paragraph(f"Tanggal Dihasilkan: {timestamp}", styles["Normal"]))
+    story.append(Paragraph("Informasi Proyek: Sistem Deteksi RipenX", styles["Normal"]))
+    story.append(Paragraph(f"Tanggal Dibuat: {timestamp}", styles["Normal"]))
     story.append(Spacer(1, 380))
-    story.append(Paragraph("<i>Laporan</i>", styles["Normal"]))
+    story.append(Paragraph("<i>Laporan ini dihasilkan otomatis oleh sistem RipenX</i>", styles["Normal"]))
     story.append(PageBreak())
 
-    # RESULTS PAGE
-    story.append(Paragraph("<b>RipenX Live Detection Summary</b>", styles["Title"]))
+    # Results page
+    story.append(Paragraph("<b>Ringkasan Deteksi Langsung RipenX</b>", styles["Title"]))
     story.append(Spacer(1, 12))
-    story.append(Paragraph(f"Recording Duration: {duration:.1f} seconds", styles["Normal"]))
+    story.append(Paragraph(f"Durasi Perekaman: {duration:.1f} detik", styles["Normal"]))
     story.append(Spacer(1, 12))
 
     if last_frame_for_pdf is not None:
@@ -347,10 +340,11 @@ def stop_record():
         story.append(RLImage(img_buf, width=400, height=300))
         story.append(Spacer(1, 12))
 
-    story.append(Paragraph("<b>Detected Object Summary (Unique Objects)</b>", styles["Heading2"]))
+    story.append(Paragraph("<b>Ringkasan Jumlah Objek Terdeteksi</b>", styles["Heading2"]))
     story.append(Spacer(1, 6))
+
     if unique_counts:
-        table_data = [["Class", "Unique Count"]] + [[cls, str(cnt)] for cls, cnt in unique_counts.items()]
+        table_data = [["Kelas", "Jumlah Unik"]] + [[cls, str(cnt)] for cls, cnt in unique_counts.items()]
         table = Table(table_data, colWidths=[200, 100])
         table.setStyle(TableStyle([
             ("BACKGROUND", (0,0), (-1,0), colors.HexColor("#4CAF50")),
@@ -360,10 +354,10 @@ def stop_record():
         ]))
         story.append(table)
     else:
-        story.append(Paragraph("No unique objects detected during this session.", styles["Normal"]))
+        story.append(Paragraph("Tidak ada objek unik yang terdeteksi selama sesi ini.", styles["Normal"]))
 
     story.append(Spacer(1, 20))
-    story.append(Paragraph("Report generated automatically by RipenX AI Vision System.", styles["Italic"]))
+    story.append(Paragraph("Laporan ini dihasilkan secara otomatis oleh sistem RipenX AI Vision.", styles["Italic"]))
 
     doc.build(story, onFirstPage=add_header_footer, onLaterPages=add_header_footer)
     return send_file(pdf_path, as_attachment=True)
