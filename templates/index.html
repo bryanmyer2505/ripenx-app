@@ -1,0 +1,39 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>RipenX Palm Oil Detection</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+    <script src="{{ url_for('static', filename='script.js') }}"></script>
+</head>
+<body>
+<div class="container">
+    <img src="{{ url_for('static', filename='RipenX logo.jpg') }}" class="logo" alt="Logo">
+    <h2>RipenX: Deteksi Buah Kelapa Sawit</h2>
+    <p>Unggah gambar atau gunakan kamera langsung Anda untuk mendeteksi objek</p>
+    <p>Model AI: RT-DETR</p>
+
+    <button onclick="showUpload()">Unggah Gambar</button>
+    <button onclick="startCamera()">Kamera Langsung</button>
+    <button onclick="startStream()">Kamera Streaming</button>
+    <script>
+    function startStream() {
+        window.location.href = '/stream';
+    }
+    </script>
+
+    <form id="uploadForm" action="/detect" method="post" enctype="multipart/form-data" style="display:none;">
+        <input type="file" name="image" accept="image/*" multiple required>
+        <input type="submit" value="Unggah dan Deteksi">
+    </form>
+
+    <div id="cameraContainer" style="display:none;">
+        <video id="camera" autoplay></video>
+        <button onclick="capture()">Ambil Gambar dan Deteksi</button>
+    </div>
+    <!-- Footer -->
+    <footer style="margin-top: 30px; color: gray; font-size: 13px;">
+            <p>© 2025 RipenX —  Menggunakan RT-DETR Object Detection Model</p>
+    </footer>
+</div>
+</body>
+</html>

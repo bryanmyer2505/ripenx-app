@@ -1,0 +1,31 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>RipenX Detection Results</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+</head>
+<body>
+    <div class="container">
+        <img src="{{ url_for('static', filename='RipenX logo.jpg') }}" class="logo" alt="RipenX Logo">
+        <h2>Hasil Deteksi</h2>
+
+        <!-- Results Section -->
+        <div class="results-container">
+            {{ results_html|safe }}
+        </div>
+
+        <!-- Action Buttons -->
+        <div style="text-align:center; margin-top:20px;">
+            <a href="/" class="btn">Kembali ke Halaman Utama</a>
+            <a href="/download_pdf" class="btn" style="margin-left:10px;">Unduh Laporan PDF</a>
+        </div>
+
+        <!-- Footer -->
+        <footer style="margin-top: 30px; color: gray; font-size: 13px;">
+            <p>© 2025 RipenX — Menggunakan RT-DETR Object Detection Model</p>
+        </footer>
+    </div>
+</body>
+</html>

@@ -1,0 +1,182 @@
+/* === GENERAL LAYOUT === */
+body {
+    font-family: Arial, sans-serif;
+    margin: 0;
+    padding: 20px;
+    background: #f4f7f9;
+}
+
+.container {
+    max-width: 500px;
+    margin: 0 auto;
+    background: #fff;
+    padding: 20px;
+    border-radius: 15px;
+    box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+    text-align: center;
+}
+
+h2 {
+    color: #2e7d32;
+}
+
+.logo {
+    width: 120px;
+    margin-bottom: 15px;
+}
+
+/* === UPLOAD & CAMERA BUTTONS === */
+button {
+    background-color: #2e7d32;
+    color: white;
+    border: none;
+    padding: 12px 18px;
+    border-radius: 8px;
+    cursor: pointer;
+    font-size: 15px;
+    margin: 5px;
+    transition: background 0.2s ease-in-out;
+}
+
+button:hover {
+    background-color: #256628;
+}
+
+input[type=file] {
+    margin: 15px 0;
+    width: 100%;
+}
+
+input[type=submit] {
+    background-color: #2e7d32;
+    color: white;
+    border: none;
+    padding: 12px 20px;
+    border-radius: 8px;
+    cursor: pointer;
+    width: 100%;
+    font-size: 16px;
+}
+
+input[type=submit]:hover {
+    background-color: #256628;
+}
+
+/* === CAMERA AREA === */
+#cameraContainer {
+    margin-top: 15px;
+    position: relative;
+    border-radius: 10px;
+    overflow: hidden;
+    box-shadow: 0 4px 8px rgba(0,0,0,0.1);
+}
+
+#camera {
+    width: 100%;
+    border-radius: 10px;
+    background: #000;
+}
+
+/* Capture button */
+#cameraContainer button {
+    margin-top: 10px;
+    background-color: #388e3c;
+}
+
+/* === RESULTS === */
+.results-container {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: center;
+    gap: 20px;
+}
+
+.card {
+    background: #fff;
+    padding: 15px;
+    border-radius: 12px;
+    box-shadow: 0 4px 10px rgba(0,0,0,0.1);
+    width: 250px;
+    text-align: center;
+    transition: transform 0.2s ease-in-out;
+}
+
+.card:hover {
+    transform: scale(1.03);
+}
+
+.card img {
+    max-width: 100%;
+    height: auto;
+    border-radius: 10px;
+    margin-bottom: 10px;
+}
+
+/* === ALERT BOX (Low Confidence) === */
+.alert-warning {
+    color: #856404;
+    background: #fff3cd;
+    border: 1px solid #ffeeba;
+    padding: 10px;
+    border-radius: 5px;
+    margin: 10px 0;
+    font-size: 14px;
+}
+
+/* === BUTTON LINKS === */
+.btn {
+    display: inline-block;
+    margin-top: 15px;
+    padding: 12px 20px;
+    background: rgb(46, 125, 50);
+    color: white;
+    text-decoration: none;
+    border-radius: 8px;
+    font-size: 16px;
+}
+
+.btn:hover {
+    background: #256628;
+}
+
+/* === PROBABILITY / DETECTION TABLE === */
+.prob-table {
+    width: 100%;
+    border-collapse: collapse;
+    margin-top: 10px;
+    font-size: 14px;
+}
+
+.prob-table th, .prob-table td {
+    padding: 6px;
+    border-bottom: 1px solid #ddd;
+}
+
+.prob-table th {
+    background: #2e7d32;
+    color: white;
+}
+
+/* === MOBILE RESPONSIVE === */
+@media (max-width: 600px) {
+    .container {
+        padding: 15px;
+    }
+
+    .card {
+        width: 100%;
+    }
+
+    button, input[type=submit], .btn {
+        width: 100%;
+        margin-top: 10px;
+    }
+}
+
+/* === LABEL TEXT === */
+label {
+    display: inline-block;
+    color: darkslategray;
+    font-size: 16px;
+    margin-top: 10px;
+}
