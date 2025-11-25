@@ -26,13 +26,11 @@ from reportlab.lib.utils import ImageReader
 """
 RipenX AI Vision Application
 
-
 A Flask-based web application for:
 - Single image detection using RT-DETR
 - Real-time video streaming with object detection
 - IoU-based simple object tracking
 - Automated PDF report generation for images and recorded sessions
-
 
 This file contains the full backend logic including:
 - Model loading
@@ -90,6 +88,8 @@ IOU_MATCH_THRESHOLD = 0.45
 last_frame_for_pdf = None
 
 # ---------------- Utility Functions ----------------
+
+#Bounding Boxes Functions:
 #IoU (Intersection over Union): Simple metric that measures how much a model's predicted object location with the ground truth.
 def iou(boxA, boxB):
     """
@@ -127,6 +127,7 @@ def boxes_from_results(results):
     arr = data.cpu().numpy()
     return arr.tolist() if arr.size else []
 
+#PDF Functions:
 # ---------------- PDF Header/Footer ----------------
 def add_header_footer(canvas, doc):
     """
